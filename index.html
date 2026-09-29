@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kost WGA — Accounting System</title>
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        wga: {
+          50: "#ECFDF5",
+          100: "#D1FAE5",
+          500: "#10B981",
+          700: "#047857",
+          900: "#064E3B"
+        }
+      }
+    }
+  }
+}
+</script>
+<link rel="stylesheet"
+ href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
+ crossorigin="anonymous" referrerpolicy="no-referrer">
+<link rel="stylesheet" href="style.css">
+</head>
+
+<body class="bg-slate-50 text-slate-800">
+
+<div id="toast-container" class="fixed top-5 right-5 z-[200] space-y-3"></div>
+
+<!-- AUTH SCREEN -->
+<div id="auth-screen" class="fixed inset-0 z-[150] bg-wga-900 hidden">
+  <div class="min-h-screen flex items-center justify-center p-5 relative overflow-hidden">
+    <div class="absolute -top-32 -right-32 w-96 h-96 rounded-full bg-emerald-500/20 blur-3xl"></div>
+    <div class="absolute -bottom-40 -left-20 w-96 h-96 rounded-full bg-emerald-300/10 blur-3xl"></div>
+
+    <div class="w-full max-w-md relative">
+      <div class="text-center mb-7 text-white">
+        <div class="mx-auto w-16 h-16 rounded-2xl bg-white/10 flex items-center justify-center mb-4">
+          <i class="fa-solid fa-building text-3xl text-emerald-200"></i>
+        </div>
+        <h1 class="text-3xl font-bold">Kost WGA</h1>
+        <p class="text-emerald-200 text-sm mt-1">Sistem Akuntansi Piutang & Penerimaan Kas</p>
+      </div>
+
+      <div class="bg-white rounded-3xl shadow-2xl overflow-hidden">
+        <div class="p-6 pb-0">
+          <div class="flex bg-slate-100 rounded-xl p-1">
+            <button id="auth-tab-login" class="auth-tab active flex-1 py-2.5 rounded-lg text-sm font-bold">Login</button>
+            <button id="auth-tab-register" class="auth-tab flex-1 py-2.5 rounded-lg text-sm font-bold text-slate-500">Register</button>
+          </div>
+        </div>
+
+        <form id="login-form" class="p-6 space-y-4">
+          <div>
+            <label class="label">Email</label>
+            <input id="login-email" type="email" class="input" placeholder="nama@email.com" required>
+          </div>
+          <div>
+            <label class="label">Password</label>
+            <input id="login-password" type="password" class="input" placeholder="••••••••" required>
+          </div>
+          <button class="btn-primary w-full py-3" type="submit">
+            <i class="fa-solid fa-right-to-bracket"></i> Masuk
+          </button>
+        </form>
+
+        <form id="register-form" class="p-6 space-y-4 hidden">
+          <div>
+            <label class="label">Nama Lengkap</label>
+            <input id="register-name" class="input" placeholder="Nama lengkap" required>
+          </div>
+          <div>
+            <label class="label">Email</label>
+            <input id="register-email" type="email" class="input" placeholder="nama@email.com" required>
+          </div>
+          <div>
+            <label class="label">Password</label>
+            <input id="register-password" type="password" minlength="6" class="input" placeholder="Minimal 6 karakter" required>
+          </div>
+          <div>
+            <label class="label">Role</label>
+            <select id="register-role" class="input">
+              <option value="pengelola">Pengelola</option>
+              <option value="pemilik">Pemilik</option>
+              <option value="admin">Admin</option>
+            </select>
+          </div>
+          <button class="btn-primary w-full py-3" type="submit">
+            <i class="fa-solid fa-user-plus"></i> Buat Akun
+          </button>
+          <p class="text-[11px] text-slate-400 leading-relaxed">
+            Pastikan Supabase Email Authentication sudah aktif. Jika email confirmation aktif,
+            akun perlu dikonfirmasi melalui email sebelum login.
+          </p>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app-shell" class="min-h-screen flex hidden">
+  <div id="sidebar-overlay" class="fixed inset-0 bg-slate-900/50 z-30 hidden lg:hidden"></div>
+
+  <aside id="sidebar" class="fixed lg:sticky top-0 left-0 z-40 h-screen w-72 shrink-0 bg-wga-900 text-white -translate-x-full lg:translate-x-0 transition-transform duration-300 flex flex-col shadow-xl">
+    <div class="px-6 py-6 border-b border-white/10">
+      <div class="flex items-center gap-3">
+        <div class="w-11 h-11 rounded-xl bg-white/10 flex items-center justify-center">
+          <i class="fa-solid fa-building text-xl text-emerald-200"></i>
+        </div>
+        <div>
+          <h1 class="font-bold text-xl">Kost WGA</h1>
+          <p class="text-emerald-200 text-xs">Accounting System</p>
+        </div>
+      </div>
+    </div>
+
+    <nav class="p-4 space-y-1 flex-1">
+      <p class="px-3 pt-2 pb-2 text-[10px] uppercase tracking-[.18em] text-emerald-300/70 font-bold">Menu Utama</p>
+      <button data-page="dashboard" class="nav-item active"><i class="fa-solid fa-chart-pie"></i><span>Dashboard</span></button>
+      <button data-page="tenants" class="nav-item"><i class="fa-solid fa-users"></i><span>Penyewa & Kamar</span></button>
+      <button data-page="receivables" class="nav-item"><i class="fa-solid fa-file-invoice-dollar"></i><span>Kontrol Piutang</span></button>
+      <button data-page="payments" class="nav-item"><i class="fa-solid fa-money-bill-transfer"></i><span>Penerimaan Kas</span></button>
+      <button data-page="maintenance" class="nav-item"><i class="fa-solid fa-screwdriver-wrench"></i><span>Maintenance & Pengeluaran</span></button>
+    </nav>
+
+    <div class="p-4">
+      <div class="rounded-2xl bg-white/10 border border-white/10 p-4">
+        <p id="sidebar-user-name" class="font-semibold text-sm truncate">User</p>
+        <p id="sidebar-user-role" class="text-xs text-emerald-200 mt-1">Role</p>
+        <button id="logout-btn" class="mt-4 w-full rounded-xl bg-white/10 hover:bg-white/15 py-2.5 text-xs font-bold">
+          <i class="fa-solid fa-right-from-bracket mr-1"></i> Logout
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <main class="flex-1 min-w-0">
+    <header class="sticky top-0 z-20 bg-white/90 backdrop-blur border-b border-slate-200">
+      <div class="h-16 px-4 sm:px-6 lg:px-8 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <button id="mobile-menu" class="lg:hidden w-10 h-10 rounded-xl hover:bg-slate-100"><i class="fa-solid fa-bars"></i></button>
+          <div>
+            <p id="page-kicker" class="text-[11px] uppercase tracking-wider text-wga-700 font-bold">Overview</p>
+            <h2 id="page-title" class="font-bold text-lg sm:text-xl">Dashboard</h2>
+          </div>
+        </div>
+        <div class="flex items-center gap-3">
+          <div class="hidden sm:block text-right">
+            <p class="text-xs text-slate-400">Periode</p>
+            <p id="period-label" class="text-sm font-semibold"></p>
+          </div>
+          <div class="w-10 h-10 rounded-xl bg-wga-100 text-wga-700 flex items-center justify-center"><i class="fa-solid fa-user-tie"></i></div>
+        </div>
+      </div>
+    </header>
+
+    <div class="p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto">
+
+      <!-- DASHBOARD -->
+      <section id="page-dashboard" class="page-section">
+        <div class="mb-6">
+          <h3 class="text-2xl font-bold">Ringkasan Keuangan</h3>
+          <p class="text-sm text-slate-500 mt-1">Pantau kas masuk, piutang, biaya maintenance, dan aktivitas Kost WGA.</p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+          <div class="stat-card"><p class="stat-label">Total Penerimaan Kas</p><p id="stat-cash" class="stat-value">Rp0</p><p class="stat-caption">Seluruh pembayaran</p><div class="stat-icon bg-emerald-50 text-emerald-600"><i class="fa-solid fa-wallet"></i></div></div>
+          <div class="stat-card"><p class="stat-label">Piutang Belum Tertagih</p><p id="stat-receivable" class="stat-value">Rp0</p><p class="stat-caption">Periode berjalan</p><div class="stat-icon bg-amber-50 text-amber-600"><i class="fa-solid fa-file-invoice"></i></div></div>
+          <div class="stat-card"><p class="stat-label">Pengeluaran Maintenance</p><p id="stat-maintenance" class="stat-value">Rp0</p><p class="stat-caption">Bulan berjalan</p><div class="stat-icon bg-rose-50 text-rose-600"><i class="fa-solid fa-screwdriver-wrench"></i></div></div>
+          <div class="stat-card"><p class="stat-label">Kamar Terisi</p><p id="stat-occupied" class="stat-value">0</p><p class="stat-caption">Penyewa aktif</p><div class="stat-icon bg-sky-50 text-sky-600"><i class="fa-solid fa-bed"></i></div></div>
+        </div>
+
+        <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+          <div class="xl:col-span-2 panel">
+            <div class="panel-header"><div><h4 class="font-bold">Kontrol Piutang</h4><p class="text-xs text-slate-400 mt-1">Status tagihan periode berjalan.</p></div><button data-page="receivables" class="link-btn">Lihat detail →</button></div>
+            <div class="p-5">
+              <div class="grid grid-cols-3 gap-3 mb-5">
+                <div class="rounded-xl bg-emerald-50 p-4"><p class="text-xs text-emerald-700">Lunas</p><p id="dash-paid-count" class="text-xl font-bold text-emerald-900 mt-1">0</p></div>
+                <div class="rounded-xl bg-amber-50 p-4"><p class="text-xs text-amber-700">Belum Lunas</p><p id="dash-unpaid-count" class="text-xl font-bold text-amber-900 mt-1">0</p></div>
+                <div class="rounded-xl bg-rose-50 p-4"><p class="text-xs text-rose-700">Jatuh Tempo</p><p id="dash-overdue-count" class="text-xl font-bold text-rose-900 mt-1">0</p></div>
+              </div>
+              <div id="dashboard-receivables"></div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-header"><div><h4 class="font-bold">Maintenance Aktif</h4><p class="text-xs text-slate-400 mt-1">Pekerjaan yang sedang berjalan.</p></div></div>
+            <div id="dashboard-maintenance" class="p-5 space-y-3"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TENANTS -->
+      <section id="page-tenants" class="page-section hidden">
+        <div class="section-heading"><div><h3>Penyewa & Kamar</h3><p>Kelola master penyewa dan tarif sewa.</p></div><button id="add-tenant-btn" class="btn-primary"><i class="fa-solid fa-plus"></i> Tambah Penyewa</button></div>
+        <div class="panel overflow-hidden">
+          <div class="p-4 border-b border-slate-100"><input id="tenant-search" class="input max-w-sm" placeholder="Cari penyewa, ID, atau kamar..."></div>
+          <div class="overflow-x-auto"><table class="data-table"><thead><tr><th>ID</th><th>Nama</th><th>Kamar</th><th>Tarif</th><th>Jatuh Tempo</th><th>Status</th><th>Aksi</th></tr></thead><tbody id="tenant-body"></tbody></table></div>
+        </div>
+      </section>
+
+      <!-- RECEIVABLES -->
+      <section id="page-receivables" class="page-section hidden">
+        <div class="section-heading"><div><h3>Kontrol Piutang</h3><p>Perhitungan piutang berdasarkan tarif dan pembayaran penyewa.</p></div><input id="rec-month" type="month" class="input w-auto"></div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <div class="mini-stat"><span>Total Tagihan</span><strong id="rec-billed">Rp0</strong></div>
+          <div class="mini-stat"><span>Total Dibayar</span><strong id="rec-paid" class="text-emerald-700">Rp0</strong></div>
+          <div class="mini-stat"><span>Sisa Piutang</span><strong id="rec-outstanding" class="text-rose-700">Rp0</strong></div>
+        </div>
+        <div class="panel overflow-hidden"><div class="overflow-x-auto"><table class="data-table"><thead><tr><th>Penyewa</th><th>Kamar</th><th>Jatuh Tempo</th><th>Tagihan</th><th>Dibayar</th><th>Sisa</th><th>Status</th><th>Aksi</th></tr></thead><tbody id="rec-body"></tbody></table></div></div>
+      </section>
+
+      <!-- PAYMENTS -->
+      <section id="page-payments" class="page-section hidden">
+        <div class="section-heading"><div><h3>Penerimaan Kas</h3><p>Catat pembayaran sewa dan pantau kas masuk.</p></div><button id="add-payment-btn" class="btn-primary"><i class="fa-solid fa-plus"></i> Catat Pembayaran</button></div>
+        <div class="panel overflow-hidden">
+          <div class="p-4 border-b border-slate-100 flex flex-col sm:flex-row gap-3 sm:justify-between"><input id="payment-search" class="input max-w-sm" placeholder="Cari transaksi atau penyewa..."><span id="payment-total" class="text-sm font-bold text-wga-700 self-center"></span></div>
+          <div class="overflow-x-auto"><table class="data-table"><thead><tr><th>Payment ID</th><th>Tanggal</th><th>Penyewa</th><th>Metode</th><th>Nominal</th><th>Status</th><th>Aksi</th></tr></thead><tbody id="payment-body"></tbody></table></div>
+        </div>
+      </section>
+
+      <!-- MAINTENANCE -->
+      <section id="page-maintenance" class="page-section hidden">
+        <div class="section-heading"><div><h3>Maintenance & Pengeluaran</h3><p>Kelola tiket pemeliharaan kamar, fasilitas, vendor, dan biaya operasional.</p></div><button id="add-maintenance-btn" class="btn-primary"><i class="fa-solid fa-plus"></i> Buat Tiket</button></div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <div class="mini-stat"><span>Biaya Maintenance Bulan Ini</span><strong id="maint-cost">Rp0</strong></div>
+          <div class="mini-stat"><span>Terjadwal</span><strong id="maint-scheduled">0</strong></div>
+          <div class="mini-stat"><span>Kamar Dalam Penanganan</span><strong id="maint-active-rooms">0</strong></div>
+        </div>
+
+        <div class="panel overflow-hidden">
+          <div class="p-4 border-b border-slate-100 flex flex-col sm:flex-row gap-3 sm:justify-between">
+            <input id="maintenance-search" class="input max-w-sm" placeholder="Cari kamar, judul, vendor...">
+            <div class="text-sm font-bold text-rose-700 self-center">Total operasional: <span id="maint-total">Rp0</span></div>
+          </div>
+          <div class="overflow-x-auto"><table class="data-table"><thead><tr><th>Tanggal</th><th>Kamar/Area</th><th>Perbaikan</th><th>Vendor</th><th>Biaya</th><th>Status</th><th>Aksi</th></tr></thead><tbody id="maintenance-body"></tbody></table></div>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+
+<!-- TENANT MODAL -->
+<div id="tenant-modal" class="modal hidden">
+ <div class="modal-card">
+  <div class="modal-header"><div><h3 id="tenant-modal-title">Tambah Penyewa</h3><p>Master data penyewa Kost WGA.</p></div><button data-close="tenant-modal" class="modal-close"><i class="fa-solid fa-xmark"></i></button></div>
+  <form id="tenant-form" class="p-5 space-y-4">
+   <input id="tenant-edit-id" type="hidden">
+  <div class="grid sm:grid-cols-2 gap-4">
+    <div><label class="label">ID Penyewa</label><input id="tenant-id" class="input" placeholder="WGA-001" required></div>
+    <div><label class="label">Nama</label><input id="tenant-name" class="input" required></div>
+   <div><label class="label">Nomor Telepon</label><input id="tenant-phone" type="tel" class="input" placeholder="08xxxxxxxxxx"></div>
+   <div><label class="label">Email</label><input id="tenant-email" type="email" class="input" placeholder="nama@email.com"></div>
+   <div class="sm:col-span-2"><label class="label">Alamat Domisili</label><textarea id="tenant-address" class="input min-h-20" placeholder="Alamat sesuai domisili saat ini"></textarea></div>
+   <div><label class="label">Pekerjaan / Instansi</label><input id="tenant-occupation" class="input" placeholder="Mahasiswa / Nama perusahaan"></div>
+   <div><label class="label">Tanggal Mulai Tinggal</label><input id="tenant-move-in-date" type="date" class="input"></div>
+   <div><label class="label">Nama Kontak Darurat</label><input id="tenant-emergency-name" class="input" placeholder="Nama keluarga / kerabat"></div>
+   <div><label class="label">Hubungan</label><input id="tenant-emergency-relation" class="input" placeholder="Orang tua, saudara, dll."></div>
+   <div><label class="label">Nomor Kontak Darurat</label><input id="tenant-emergency-phone" type="tel" class="input" placeholder="08xxxxxxxxxx"></div>
+   <div>
+    <label class="label">Foto / Scan KTP</label>
+    <input id="tenant-id-card" type="file" class="input" accept="image/jpeg,image/png,application/pdf">
+    <p class="hint">JPG, PNG, atau PDF; maksimal 5 MB. Disimpan secara privat.</p>
+    <button id="tenant-id-card-view" type="button" class="link-btn mt-2 hidden"><i class="fa-solid fa-eye mr-1"></i>Lihat KTP tersimpan</button>
+   </div>
+    <div><label class="label">Nomor Kamar</label><input id="tenant-room" class="input" required></div>
+    <div><label class="label">Tarif / Bulan</label><input id="tenant-rent" type="number" class="input" min="0" required></div>
+    <div><label class="label">Tanggal Jatuh Tempo</label><input id="tenant-due" type="number" class="input" min="1" max="31" required></div>
+    <div><label class="label">Status</label><select id="tenant-status" class="input"><option>Aktif</option><option>Keluar</option></select></div>
+   </div>
+  <div class="flex justify-end gap-2"><button type="button" data-close="tenant-modal" class="btn-secondary">Batal</button><button id="tenant-save-btn" class="btn-primary">Simpan</button></div>
+  </form>
+ </div>
+</div>
+
+<!-- PAYMENT MODAL -->
+<div id="payment-modal" class="modal hidden">
+ <div class="modal-card">
+  <div class="modal-header"><div><h3>Catat Penerimaan Kas</h3><p>Pembayaran sewa akan tercatat sebagai kas masuk.</p></div><button data-close="payment-modal" class="modal-close"><i class="fa-solid fa-xmark"></i></button></div>
+  <form id="payment-form" class="p-5 space-y-4">
+   <div><label class="label">Penyewa</label><select id="payment-tenant" class="input" required></select></div>
+   <div class="grid sm:grid-cols-2 gap-4">
+    <div><label class="label">Nominal</label><input id="payment-amount" type="number" min="1" class="input" required><p id="payment-hint" class="hint"></p></div>
+    <div><label class="label">Tanggal</label><input id="payment-date" type="date" class="input" required></div>
+    <div><label class="label">Metode</label><select id="payment-method" class="input"><option>Cash</option><option>Transfer</option></select></div>
+    <div><label class="label">Status</label><select id="payment-status" class="input"><option>Lunas</option><option>Belum Lunas</option><option>Dibatalkan</option></select></div>
+   </div>
+   <div><label class="label">Catatan</label><textarea id="payment-notes" class="input min-h-20" placeholder="Catatan pembayaran..."></textarea></div>
+   <div class="flex justify-end gap-2"><button type="button" data-close="payment-modal" class="btn-secondary">Batal</button><button class="btn-primary">Simpan Pembayaran</button></div>
+  </form>
+ </div>
+</div>
+
+<!-- MAINTENANCE MODAL -->
+<div id="maintenance-modal" class="modal hidden">
+ <div class="modal-card">
+  <div class="modal-header"><div><h3 id="maintenance-modal-title">Buat Tiket Maintenance</h3><p>Catat pekerjaan dan estimasi pengeluaran.</p></div><button data-close="maintenance-modal" class="modal-close"><i class="fa-solid fa-xmark"></i></button></div>
+  <form id="maintenance-form" class="p-5 space-y-4">
+   <input id="maintenance-edit-id" type="hidden">
+   <div class="grid sm:grid-cols-2 gap-4">
+    <div><label class="label">Nomor Kamar / Area</label><input id="maintenance-room" class="input" placeholder="A-01 / Dapur / Halaman"></div>
+    <div><label class="label">Tanggal Perawatan</label><input id="maintenance-date" type="date" class="input" required></div>
+    <div class="sm:col-span-2"><label class="label">Judul Perbaikan</label><input id="maintenance-title" class="input" placeholder="Perbaikan AC kamar A-01" required></div>
+    <div class="sm:col-span-2"><label class="label">Deskripsi</label><textarea id="maintenance-description" class="input min-h-24" placeholder="Detail kerusakan / pekerjaan..."></textarea></div>
+    <div><label class="label">Est. Biaya / Cost</label><input id="maintenance-cost" type="number" class="input" min="0" required></div>
+    <div><label class="label">Tukang / Vendor</label><input id="maintenance-vendor" class="input" placeholder="Nama vendor"></div>
+    <div><label class="label">Status</label><select id="maintenance-status" class="input"><option value="scheduled">Scheduled</option><option value="in_progress">In Progress</option><option value="completed">Completed</option></select></div>
+   </div>
+   <div class="flex justify-end gap-2"><button type="button" data-close="maintenance-modal" class="btn-secondary">Batal</button><button class="btn-primary">Simpan Tiket</button></div>
+  </form>
+ </div>
+</div>
+
+<div id="confirm-modal" class="modal hidden">
+ <div class="modal-card max-w-md"><div class="p-6 text-center">
+  <div class="mx-auto w-12 h-12 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center"><i class="fa-solid fa-trash"></i></div>
+  <h3 id="confirm-title" class="font-bold text-lg mt-4">Hapus data?</h3><p id="confirm-message" class="text-sm text-slate-500 mt-2"></p>
+  <div class="mt-6 flex justify-center gap-2"><button id="confirm-cancel" class="btn-secondary">Batal</button><button id="confirm-ok" class="btn-danger">Hapus</button></div>
+ </div></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

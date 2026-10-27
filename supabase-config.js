@@ -200,15 +200,6 @@ const api = {
     return data.signedUrl;
   },
 
-  async deleteTenant(id) {
-    this.ensureReady();
-    const { error } = await supabaseClient
-      .from("tenants")
-      .delete()
-      .eq("id", id);
-    if (error) throw error;
-  },
-
   // ---------------- PAYMENTS ----------------
   async getPayments() {
     this.ensureReady();

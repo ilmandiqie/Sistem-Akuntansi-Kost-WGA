@@ -282,11 +282,20 @@ async function loadData() {
 }
 
 function navigate(page) {
+  const target=document.getElementById(`page-${page}`);
+  if(!meta[page]||!target){
+    console.warn(`Halaman aplikasi tidak tersedia: ${page}`);
+    return;
+  }
   state.page=page;
-  document.querySelectorAll(".page-section").forEach(s=>s.classList.add("hidden"));
-  document.getElementById("page-"+page).classList.remove("hidden");
+  document.querySelectorAll(".page-section").forEach(section=>{
+    const isActive=section===target;
+    section.hidden=!isActive;
+    section.classList.toggle("hidden",!isActive);
+  });
   document.querySelectorAll(".nav-item").forEach(b=>b.classList.toggle("active",b.dataset.page===page));
   const m=meta[page]; document.getElementById("page-kicker").textContent=m[0]; document.getElementById("page-title").textContent=m[1];
+  window.scrollTo(0,0);
   closeMobile(); renderCurrent();
 }
 
@@ -640,7 +649,7 @@ function renderTenants() {
   el("tenant-body").innerHTML=rows.length?rows.map(t=>`<tr>
     <td class="font-bold text-wga-700">${esc(t.tenant_id)}</td><td class="font-semibold">${esc(t.name)}<small>${esc(t.contract_number||"")}</small></td><td>${esc(t.room_number)}</td><td class="font-bold">${idr(t.monthly_rent)}</td><td>Tanggal ${t.due_date}</td>
     <td>${t.status==="Aktif"?'<span class="badge green">Aktif</span>':'<span class="badge gray">Keluar</span>'}</td>
-    <td><button class="text-wga-700 p-2" title="Riwayat kontrak" aria-label="Riwayat kontrak" onclick="viewTenantContracts('${t.id}')"><i class="fa-solid fa-file-contract"></i></button>${canManageData()?`<button class="text-slate-500 p-2" onclick="editTenant('${t.id}')"><i class="fa-solid fa-pen"></i></button><button class="text-rose-500 p-2" onclick="deleteTenantAsk('${t.id}')"><i class="fa-solid fa-trash"></i></button>`:""}</td>
+    <td><button class="text-wga-700 p-2" title="Riwayat kontrak" aria-label="Riwayat kontrak" onclick="viewTenantContracts('${t.id}')"><i class="fa-solid fa-file-contract"></i></button>${canManageData()?`<button class="text-slate-500 p-2" title="Edit penyewa" aria-label="Edit penyewa" onclick="editTenant('${t.id}')"><i class="fa-solid fa-pen"></i></button>${t.status==="Aktif"?`<button class="text-amber-700 p-2" title="Arsipkan penyewa" aria-label="Arsipkan ${escAttr(t.name)}" onclick="archiveTenantAsk('${t.id}')"><i class="fa-solid fa-box-archive"></i></button>`:""}`:""}</td>
   </tr>`).join(""):`<tr><td colspan="7">${empty("fa-users-slash","Belum ada penyewa.")}</td></tr>`;
 }
 async function viewTenantContracts(tenantId) {
@@ -1627,7 +1636,22 @@ async function saveMaintenance(e) {
   try{if(state.editingMaintenanceId)await api.updateMaintenance(state.editingMaintenanceId,payload);else await api.createMaintenance(payload);closeModal("maintenance-modal");toast("Tiket maintenance tersimpan.");await loadData()}catch(e){toast(e.message,"error")}
 }
 
-function deleteTenantAsk(id){confirmAsk("Hapus penyewa?","Data penyewa akan dihapus. Pembayaran terkait dapat terhalang foreign key jika masih ada.",async()=>{const tenant=tenantById(id);try{await api.deleteTenant(id);if(tenant?.id_card_path)try{await api.removeTenantIdCard(tenant.id_card_path)}catch(storageError){console.warn("Berkas KTP tidak dapat dihapus:",storageError)}toast("Penyewa dihapus.");await loadData()}catch(e){toast(e.message,"error")}})}
+function archiveTenantAsk(id){
+  const tenant=tenantById(id);
+  if(!tenant||tenant.status!=="Aktif"){toast("Penyewa aktif tidak ditemukan.","error");return}
+  confirmAsk(
+    "Arsipkan penyewa?",
+    `Status ${tenant.name} akan diubah menjadi Keluar. Riwayat pembayaran, invoice, kontrak, dan dokumen tetap disimpan.`,
+    async()=>{
+      try{
+        await api.updateTenant(id,{status:"Keluar"});
+        toast("Penyewa diarsipkan. Riwayat transaksi tetap tersimpan.");
+        await loadData();
+      }catch(error){toast(error.message,"error")}
+    }
+  );
+}
+window.archiveTenantAsk=archiveTenantAsk;
 function cancelPaymentAsk(id){confirmAsk("Batalkan pembayaran?","Jurnal pembalik akan dibuat dan transaksi tetap tersimpan untuk audit.",async()=>{try{await api.updatePayment(id,{status:"Dibatalkan"});toast("Pembayaran dibatalkan dan jurnal pembalik dibuat.");await loadData()}catch(e){toast(e.message,"error")}})}
 function deletePaymentAsk(id){confirmAsk("Hapus pembayaran?","Hanya pembayaran yang belum terjurnal yang dapat dihapus.",async()=>{try{await api.deletePayment(id);toast("Pembayaran dihapus.");await loadData()}catch(e){toast(e.message,"error")}})}
 function deleteMaintenanceAsk(id){confirmAsk("Hapus tiket maintenance?","Catatan pengeluaran ini akan dihapus.",async()=>{try{await api.deleteMaintenance(id);toast("Maintenance dihapus.");await loadData()}catch(e){toast(e.message,"error")}})}

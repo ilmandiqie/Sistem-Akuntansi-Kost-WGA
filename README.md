@@ -1,6 +1,6 @@
-# Kost WGA - Sistem Akuntansi Piutang & Penerimaan Kas
+# PROPMATE — Sistem Manajemen Properti
 
-Aplikasi web untuk membantu pengelolaan administrasi dan pencatatan akuntansi usaha kost, meliputi data penyewa, piutang sewa, penerimaan kas, dan maintenance.
+Aplikasi web untuk mengelola properti, kamar, penyewa, kontrak, tagihan, pembayaran, dan operasional penginapan. Modul keuangan tetap tersedia untuk pencatatan serta pelaporan.
 
 > **Live Demo:** [Klik di sini untuk membuka aplikasi](https://ilmandiqie.github.io/Sistem-Akuntansi-Kost-WGA/)
 
@@ -8,7 +8,7 @@ Aplikasi web untuk membantu pengelolaan administrasi dan pencatatan akuntansi us
 
 ## Deskripsi Proyek
 
-**Sistem Akuntansi Kost WGA** dirancang untuk membantu pengelola usaha kost dalam mengelola transaksi dan informasi operasional secara terintegrasi.
+**PROPMATE** dirancang untuk membantu pengelola properti dan penginapan dalam mengelola penyewa, transaksi, serta informasi operasional secara terintegrasi.
 
 Sistem mencakup pengelolaan **data penyewa dan kamar, kontrol piutang sewa, pencatatan penerimaan kas, serta pencatatan biaya maintenance**. Data tersimpan pada database PostgreSQL melalui Supabase sehingga dapat digunakan secara terintegrasi dengan aplikasi web.
 
@@ -124,20 +124,25 @@ Setelah registrasi berhasil, trigger PostgreSQL `handle_new_user()` secara otoma
 
 1. Buat project pada Supabase dan pastikan Authentication > Providers > Email aktif.
 2. Untuk project Supabase baru, jalankan `schema.sql` melalui SQL Editor. Untuk database yang sudah berisi data, jangan jalankan ulang `schema.sql` karena file tersebut menghapus tabel; jalankan migration profil tenant hanya bila kolomnya belum tersedia.
-3. Jalankan migration berurutan melalui Supabase SQL Editor: `accounting-migration.sql`, `accounting-advanced-migration.sql`, `security-role-migration.sql`, `property-room-migration.sql`, `tenant-contract-migration.sql`, `tenant-contract-history-migration.sql`, `billing-accounting-migration.sql`, `payment-verification-migration.sql`, `payment-evidence-migration.sql`, lalu `accounting-period-control-migration.sql`.
+3. Jalankan migration berurutan melalui Supabase SQL Editor: `accounting-migration.sql`, `accounting-advanced-migration.sql`, `security-role-migration.sql`, `user-approval-migration.sql`, `user-access-revocation-migration.sql`, `property-room-migration.sql`, `tenant-contract-migration.sql`, `tenant-contract-history-migration.sql`, `billing-accounting-migration.sql`, `payment-verification-migration.sql`, `payment-evidence-migration.sql`, lalu `accounting-period-control-migration.sql`.
 4. Masukkan `SUPABASE_URL` dan `SUPABASE_ANON_KEY` pada `supabase-config.js`.
-5. Register akun melalui aplikasi. Akun baru menunggu persetujuan dan belum bisa membaca atau mengubah data.
-6. Untuk mengaktifkan akun pertama, ambil UUID akun dari Authentication > Users, lalu jalankan ini di Supabase SQL Editor dengan mengganti UUID contoh. Gunakan role `admin` untuk akun pemilik sistem. Akun `pemilik` hanya dapat membaca; role `admin` dan `pengelola` dapat mengelola transaksi.
+5. Register akun pertama melalui aplikasi. Migration keamanan membuat profilnya menunggu persetujuan.
+6. Untuk bootstrap admin pertama saja, ambil UUID akun dari Authentication > Users, lalu jalankan SQL ini di Supabase SQL Editor. Akun `pemilik` hanya dapat membaca; role `admin` dan `pengelola` dapat mengelola transaksi.
 
      ```sql
      update public.users_profile
      set role = 'admin', approved = true
      where id = 'GANTI_DENGAN_UUID_DARI_AUTH_USERS';
      ```
-7. Jalankan `seed.sql` hanya bila ingin memasukkan data contoh.
-8. Buka `index.html` menggunakan Live Server atau akses melalui GitHub Pages.
+7. Setelah admin pertama dapat login, pendaftar berikutnya bisa disetujui dari menu **Pengguna**. Tidak perlu menjalankan SQL untuk setiap akun.
+8. Jalankan `seed.sql` hanya bila ingin memasukkan data contoh.
+9. Buka `index.html` menggunakan Live Server atau akses melalui GitHub Pages.
 
 Migration accounting menambahkan jurnal dan COA; migration advanced menambahkan deposit, refund, jurnal otomatis saat deposit diterima/dicairkan, dan audit trail; migration role menerapkan RLS berdasarkan profil. Migration aman untuk dijalankan ulang dan tidak menghapus data lama. Jangan bagikan `service_role` key di frontend.
+
+`user-approval-migration.sql` dijalankan satu kali setelah `security-role-migration.sql`. Migration ini membuat profil pending untuk user Auth yang belum memiliki profil serta RPC admin untuk melihat daftar akun dan menyetujui pendaftar. Persetujuan selanjutnya dilakukan melalui menu **Pengguna** di aplikasi, tanpa SQL per akun. Registrasi publik tetap menunggu persetujuan agar akun baru tidak langsung dapat membaca data keuangan.
+
+`user-access-revocation-migration.sql` dijalankan satu kali setelah `user-approval-migration.sql`. Admin dapat mencabut atau memulihkan akses dari menu **Pengguna** tanpa menghapus akun Auth, password, atau riwayatnya. Akses admin terakhir tidak dapat dicabut.
 
 Jika kolom tanggal/status pembayaran vendor belum tersedia, jalankan kembali `accounting-advanced-migration.sql`, lalu `security-role-migration.sql`. Untuk database yang telah menjalankan migration sebelumnya, jalankan `tenant-contract-history-migration.sql` satu kali untuk membuat snapshot kontrak historis; jalankan ulang `billing-accounting-migration.sql` hanya jika belum berhasil atau jika versi sebelumnya belum memfilter masa kontrak. Migration properti mempertahankan `tenants.room_number` dan menghubungkan data lama ke properti Kost WGA. Laporan saat ini adalah laporan manajemen berbasis jurnal posted, bukan laporan audit atau jaminan kepatuhan penuh SAK EMKM. Histori dokumen/revisi dan tanda tangan kontrak, invoice multi-item, pajak/diskon yang dapat dikonfigurasi, pembatalan/kredit invoice, dan alokasi satu pembayaran ke banyak invoice belum tersedia.
 

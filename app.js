@@ -14,6 +14,8 @@ const state = {
   journalEntries: [],
   deposits: [],
   refunds: [],
+  userDirectory: [],
+  userDirectoryError: "",
   reminderInvoiceId: "",
   tenantSearch: "",
   paymentSearch: "",
@@ -38,7 +40,8 @@ const meta = {
   payments: ["Cash Receipt", "Penerimaan Kas"],
   maintenance: ["Operational", "Maintenance & Pengeluaran"],
   accounting: ["Accounting", "Laporan Keuangan"],
-  deposits: ["Tenant Finance", "Deposit & Refund"]
+  deposits: ["Tenant Finance", "Deposit & Refund"],
+  users: ["Administration", "Pengguna"]
 };
 
 document.addEventListener("DOMContentLoaded", init);
@@ -94,6 +97,12 @@ function bindUI() {
   document.getElementById("login-form").onsubmit = login;
   document.getElementById("register-form").onsubmit = register;
   document.getElementById("logout-btn").onclick = logout;
+  document.getElementById("user-directory-body").onclick = event => {
+    const approveButton=event.target.closest("[data-approve-user]");
+    const revokeButton=event.target.closest("[data-revoke-user]");
+    if(approveButton)approveKostUser(approveButton.dataset.approveUser);
+    if(revokeButton)revokeKostUser(revokeButton.dataset.revokeUser);
+  };
 
   document.querySelectorAll("[data-page]").forEach(b => b.addEventListener("click", () => navigate(b.dataset.page)));
   document.getElementById("mobile-menu").onclick = openMobile;
@@ -218,6 +227,8 @@ async function enterApp(user) {
   const canManage = ["admin", "pengelola"].includes(state.profile.role);
   ["add-tenant-btn", "add-payment-btn", "add-maintenance-btn", "issue-invoices-btn"].forEach(id => el(id).classList.toggle("hidden", !canManage));
   ["dashboard-add-tenant", "dashboard-create-invoice", "dashboard-add-payment", "dashboard-add-maintenance"].forEach(id => el(id).classList.toggle("hidden", !canManage));
+  el("admin-nav-label").classList.toggle("hidden",state.profile.role!=="admin");
+  el("admin-users-nav").classList.toggle("hidden",state.profile.role!=="admin");
   el("close-period-btn").classList.toggle("hidden",state.profile.role!=="admin");
   ["property-form", "room-form"].forEach(id => el(id).closest(".panel").classList.toggle("hidden", !canManage));
   ["deposit-form", "refund-form"].forEach(id => el(id).closest(".panel").classList.toggle("hidden", !canManage));
@@ -275,6 +286,13 @@ async function loadData() {
       }
     }
 
+    state.userDirectory=[];
+    state.userDirectoryError="";
+    if(state.profile?.role==="admin"){
+      try{state.userDirectory=await api.getUserDirectory()}
+      catch(error){state.userDirectoryError=error.message||"Fitur persetujuan pengguna belum disiapkan."}
+    }
+
     renderAll();
   } catch(e) {
     console.error(e); toast("Gagal memuat data: "+e.message,"error");
@@ -308,8 +326,68 @@ function renderCurrent() {
   if(state.page==="maintenance")renderMaintenance();
   if(state.page==="accounting")renderAccounting();
   if(state.page==="deposits")renderDeposits();
+  if(state.page==="users")renderUserDirectory();
 }
-function renderAll(){renderDashboard();renderPropertyRooms();renderTenants();renderReceivables();renderPayments();renderMaintenance();renderAccounting();renderDeposits();populatePaymentInvoiceSelect();populateTenantRoomSelect();populatePropertySelect();populateDepositTenantSelect();populateRefundDepositSelect();}
+function renderAll(){renderDashboard();renderPropertyRooms();renderTenants();renderReceivables();renderPayments();renderMaintenance();renderAccounting();renderDeposits();renderUserDirectory();populatePaymentInvoiceSelect();populateTenantRoomSelect();populatePropertySelect();populateDepositTenantSelect();populateRefundDepositSelect();}
+
+function renderUserDirectory(){
+  if(!el("user-directory-body"))return;
+  const pending=(state.userDirectory||[]).filter(user=>!user.approved&&!user.access_revoked_at).length;
+  el("user-pending-count").textContent=String(pending);
+  if(state.userDirectoryError){
+    el("user-directory-body").innerHTML=`<tr><td colspan="5">${empty("fa-circle-exclamation",`${esc(state.userDirectoryError)} Jalankan user-approval-migration.sql satu kali di Supabase SQL Editor.`)}</td></tr>`;
+    return;
+  }
+  const users=state.userDirectory||[];
+  el("user-directory-body").innerHTML=users.length?users.map(user=>`<tr>
+    <td><b>${esc(user.full_name||"Pengguna")}</b><small>${esc(user.email||user.user_id)}</small></td>
+    <td>${esc(user.role||"pengelola")}</td>
+    <td>${formatDate(String(user.registered_at||"").slice(0,10))}</td>
+    <td><span class="badge ${user.approved?"green":user.access_revoked_at?"gray":"yellow"}">${user.approved?"Disetujui":user.access_revoked_at?"Akses dicabut":"Menunggu"}</span></td>
+    <td>${user.approved
+      ?user.user_id===state.user?.id?'<span class="text-slate-400">Akun Anda</span>':`<button type="button" class="btn-danger !py-2 !px-3" data-revoke-user="${escAttr(user.user_id)}"><i class="fa-solid fa-user-slash"></i> Cabut akses</button>`
+      :`<button type="button" class="btn-primary !py-2 !px-3" data-approve-user="${escAttr(user.user_id)}"><i class="fa-solid fa-user-check"></i> ${user.access_revoked_at?"Setujui ulang":"Setujui"}</button>`}</td>
+  </tr>`).join(""):`<tr><td colspan="5">${empty("fa-user-check","Belum ada akun yang terdaftar.")}</td></tr>`;
+}
+
+function approveKostUser(userId){
+  const user=(state.userDirectory||[]).find(item=>item.user_id===userId);
+  if(!user||user.approved){toast("Akun tidak ditemukan atau sudah disetujui.","error");return}
+  confirmAsk(
+    user.access_revoked_at?"Pulihkan akses akun?":"Setujui akun?",
+    `Akun ${user.email||user.full_name} akan dapat login kembali dan mengakses data sesuai role pengelola.`,
+    async()=>{
+      try{
+        await api.approveUser(userId);
+        toast(user.access_revoked_at?"Akses akun dipulihkan.":"Akun berhasil disetujui.");
+        await loadData();
+      }catch(error){toast(error.message,"error")}
+    },
+    {
+      confirmLabel:user.access_revoked_at?"Pulihkan akses":"Setujui akun",
+      confirmClass:"btn-primary",
+      icon:"fa-user-check",
+      iconClass:"bg-emerald-50 text-emerald-600"
+    }
+  );
+}
+
+function revokeKostUser(userId){
+  const user=(state.userDirectory||[]).find(item=>item.user_id===userId);
+  if(!user||!user.approved||user.user_id===state.user?.id){toast("Akun tidak dapat dicabut atau tidak ditemukan.","error");return}
+  confirmAsk(
+    "Cabut akses akun?",
+    `Akun ${user.email||user.full_name} tidak dapat login ke aplikasi sampai disetujui kembali. Akun Auth, password, dan riwayat data tetap disimpan.`,
+    async()=>{
+      try{
+        await api.revokeUser(userId);
+        toast("Akses akun dicabut. Akun dapat dipulihkan dari halaman ini.");
+        await loadData();
+      }catch(error){toast(error.message,"error")}
+    },
+    {confirmLabel:"Cabut akses",icon:"fa-user-slash"}
+  );
+}
 
 function renderDashboard() {
   const range=getDashboardRange();
@@ -341,7 +419,7 @@ function renderDashboard() {
   const periodLabel=`${formatDate(range.from)} – ${formatDate(range.to)}`;
 
   el("dashboard-date").textContent=new Intl.DateTimeFormat("id-ID",{weekday:"long",day:"numeric",month:"long",year:"numeric"}).format(new Date());
-  el("dashboard-greeting").textContent=`${timeGreeting()}, ${state.profile?.full_name||"Pengelola Kost WGA"}`;
+  el("dashboard-greeting").textContent=`${timeGreeting()}, ${state.profile?.full_name||"Pengelola PROPMATE"}`;
   el("dashboard-period-caption").textContent=periodLabel;
   el("dashboard-chart-range").textContent=periodLabel;
   el("dashboard-invoice-period").textContent=`Nominal invoice · ${monthLabel(state.receivableMonth)}`;
@@ -570,7 +648,7 @@ function renderPropertyRooms() {
   `).join(""):`<tr><td colspan="5">${empty("fa-building","Belum ada properti.")}</td></tr>`;
   el("room-body").innerHTML=state.rooms.length?state.rooms.map(room=>{
     const statusOptions=["available","reserved","occupied","maintenance","inactive"].map(status=>`<option value="${status}" ${room.status===status?"selected":""}>${status}</option>`).join("");
-    return `<tr><td>${esc(room.properties?.name||"Kost WGA")}</td><td class="font-bold">${esc(room.room_number)}</td><td>${room.floor_number||"-"}</td><td>${esc(room.room_type)}</td><td>${idr(room.monthly_rent)}</td><td>${esc(room.condition)}</td><td>${canManageData()?`<select class="input !py-1 !px-2" aria-label="Status kamar ${escAttr(room.room_number)}" onchange="updateRoomStatus('${room.id}',this.value)">${statusOptions}</select>`:`<span class="badge ${room.status==="occupied"?"blue":room.status==="available"?"green":"yellow"}">${esc(room.status)}</span>`}</td></tr>`;
+    return `<tr><td>${esc(room.properties?.name||"Properti Utama")}</td><td class="font-bold">${esc(room.room_number)}</td><td>${room.floor_number||"-"}</td><td>${esc(room.room_type)}</td><td>${idr(room.monthly_rent)}</td><td>${esc(room.condition)}</td><td>${canManageData()?`<select class="input !py-1 !px-2" aria-label="Status kamar ${escAttr(room.room_number)}" onchange="updateRoomStatus('${room.id}',this.value)">${statusOptions}</select>`:`<span class="badge ${room.status==="occupied"?"blue":room.status==="available"?"green":"yellow"}">${esc(room.status)}</span>`}</td></tr>`;
   }).join(""):`<tr><td colspan="7">${empty("fa-door-closed","Belum ada data kamar. Tambahkan properti dan kamar.")}</td></tr>`;
   el("room-grid").innerHTML=state.rooms.length?state.rooms.map(room=>{
     const activeTenant=canManageData()?state.tenants.find(tenant=>tenant.room_id===room.id&&tenant.status==="Aktif"):null;
@@ -580,7 +658,7 @@ function renderPropertyRooms() {
     const statusOptions=["available","reserved","occupied","maintenance","inactive"].map(status=>`<option value="${status}" ${room.status===status?"selected":""}>${statusLabels[status]}</option>`).join("");
     return `<article class="room-tile ${statusClasses[room.status]||"room-status-inactive"}">
       <div class="room-tile-top"><span class="room-status-mark" aria-hidden="true"></span><span class="room-status-label">${esc(statusLabels[room.status]||room.status)}</span><span class="room-number">${esc(room.room_number)}</span></div>
-      <p class="room-property">${esc(room.properties?.name||"Kost WGA")}${room.floor_number?` · Lantai ${room.floor_number}`:""}</p>
+      <p class="room-property">${esc(room.properties?.name||"Properti Utama")}${room.floor_number?` · Lantai ${room.floor_number}`:""}</p>
       <h5>${esc(room.room_type||"Kamar")}</h5>
       <p class="room-rent">${idr(room.monthly_rent)}<small> / bulan</small></p>
       <div class="room-tile-details"><span><i class="fa-solid fa-screwdriver-wrench"></i> ${activeWork.length?`${activeWork.length} pekerjaan aktif`:"Kondisi " + esc(room.condition||"baik")}</span>${room.facilities?`<span><i class="fa-solid fa-list-check"></i> ${esc(room.facilities)}</span>`:""}${activeTenant?`<span><i class="fa-solid fa-user"></i> ${esc(activeTenant.name)}</span>`:""}</div>
@@ -636,7 +714,7 @@ function populatePropertySelect() {
 function populateTenantRoomSelect() {
   const currentTenant=state.editingTenantId?tenantById(state.editingTenantId):null;
   const available=state.rooms.filter(room=>room.status==="available"||room.id===currentTenant?.room_id);
-  el("tenant-room").innerHTML='<option value="">Pilih kamar...</option>'+available.map(room=>`<option value="${escAttr(room.id)}">${esc(room.properties?.name||"Kost WGA")} — ${esc(room.room_number)} · ${idr(room.monthly_rent)}</option>`).join("");
+  el("tenant-room").innerHTML='<option value="">Pilih kamar...</option>'+available.map(room=>`<option value="${escAttr(room.id)}">${esc(room.properties?.name||"Properti Utama")} — ${esc(room.room_number)} · ${idr(room.monthly_rent)}</option>`).join("");
 }
 
 function updateTenantRoomRent() {
@@ -776,6 +854,15 @@ function renderPayments() {
   </tr>`).join(""):`<tr><td colspan="9">${empty("fa-receipt","Belum ada pembayaran.")}</td></tr>`;
 }
 
+function applyPropMatePrintBrand(printWindow) {
+  if (printWindow.document.title.includes("Kost WGA")) {
+    printWindow.document.title=printWindow.document.title.replaceAll("Kost WGA","PROPMATE");
+  }
+  printWindow.document.querySelectorAll(".brand").forEach(brand=>{brand.textContent="PROPMATE";});
+  const heading=printWindow.document.querySelector("body > h1");
+  if(heading?.textContent.trim()==="Kost WGA")heading.textContent="PROPMATE";
+}
+
 function printInvoice(id) {
   const payment=state.payments.find(p=>p.id===id);
   if(!payment||payment.status!=="Lunas"){toast("Invoice hanya tersedia untuk pembayaran lunas.","error");return}
@@ -785,6 +872,7 @@ function printInvoice(id) {
   printWindow.document.write(`<!doctype html><html lang="id"><head><meta charset="utf-8"><title>Invoice ${esc(payment.payment_id)}</title><style>
     *{box-sizing:border-box}body{font:14px Arial,sans-serif;color:#17211f;margin:0;padding:40px}.invoice{max-width:720px;margin:auto;border:1px solid #d7e2dd;padding:36px}.top{display:flex;justify-content:space-between;gap:24px;border-bottom:2px solid #087a56;padding-bottom:22px}.brand{font-size:24px;font-weight:700;color:#087a56}.muted{color:#64746e}.number{text-align:right}.number strong{font-size:17px}.status{display:inline-block;margin-top:8px;padding:6px 10px;background:#e8f7ef;color:#087a56;font-weight:bold}.title{margin:30px 0 18px;font-size:20px}.details{display:grid;grid-template-columns:1fr 1fr;gap:16px}.label{font-size:11px;text-transform:uppercase;color:#64746e;margin-bottom:5px}.value{font-weight:600}.amount{margin-top:28px;padding:18px;background:#f2f8f5;display:flex;justify-content:space-between;align-items:center}.amount strong{font-size:22px;color:#087a56}.notes{margin-top:22px}.footer{margin-top:54px;padding-top:14px;border-top:1px solid #d7e2dd;color:#64746e;font-size:12px;text-align:center}@media print{body{padding:0}.invoice{border:0;padding:20px;max-width:none}}</style></head><body><main class="invoice"><header class="top"><div><div class="brand">Kost WGA</div><div class="muted">Bukti penerimaan pembayaran sewa</div></div><div class="number"><div class="muted">No. Invoice</div><strong>${esc(payment.payment_id)}</strong><div class="status">LUNAS</div></div></header><h1 class="title">Invoice Pembayaran</h1><section class="details"><div><div class="label">Nama Penyewa</div><div class="value">${esc(payment.tenant_name)}</div></div><div><div class="label">Nomor Kamar</div><div class="value">${esc(payment.room_number)}</div></div><div><div class="label">Tanggal Pembayaran</div><div class="value">${formatDate(payment.payment_date)}</div></div><div><div class="label">Metode Pembayaran</div><div class="value">${esc(payment.payment_method)}</div></div></section><div class="amount"><span>Total dibayarkan</span><strong>${idr(payment.amount)}</strong></div>${notes}<footer class="footer">Terima kasih telah melakukan pembayaran. Invoice ini diterbitkan oleh Kost WGA.</footer></main><script>window.onload=()=>setTimeout(()=>window.print(),250)</script></body></html>`);
   printWindow.document.close();
+  applyPropMatePrintBrand(printWindow);
 }
 
 function printRentInvoice(id) {
@@ -797,6 +885,7 @@ function printRentInvoice(id) {
   if(!printWindow){toast("Izinkan pop-up untuk mencetak invoice.","error");return}
   printWindow.document.write(`<!doctype html><html lang="id"><head><meta charset="utf-8"><title>${esc(invoice.invoice_no)}</title><style>*{box-sizing:border-box}body{font:14px Arial,sans-serif;color:#1f2937;margin:40px}.invoice{max-width:760px;margin:auto}.header{display:flex;justify-content:space-between;border-bottom:2px solid #047857;padding-bottom:20px}.brand{font-size:24px;color:#047857;font-weight:bold}.muted{color:#64748b;font-size:12px}.title{font-size:22px;margin:26px 0 16px}.details{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:26px}.label{font-size:11px;color:#64748b;text-transform:uppercase}.value{font-weight:bold;margin-top:4px}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:10px;border-bottom:1px solid #e2e8f0}th:last-child,td:last-child{text-align:right}.totals{margin:20px 0 0 auto;width:min(100%,360px)}.totals div{display:flex;justify-content:space-between;padding:6px 0}.grand{border-top:2px solid #047857;font-size:18px;font-weight:bold}.footer{margin-top:42px;text-align:center;border-top:1px solid #cbd5e1;padding-top:14px;color:#64748b;font-size:12px}@media print{body{margin:12mm}}</style></head><body><main class="invoice"><header class="header"><div><div class="brand">Kost WGA</div><div class="muted">Tagihan sewa</div></div><div style="text-align:right"><div class="label">Nomor Invoice</div><strong>${esc(invoice.invoice_no)}</strong></div></header><h1 class="title">Invoice Sewa</h1><section class="details"><div><div class="label">Penyewa</div><div class="value">${esc(tenant?.name||invoice.tenant_id)}</div></div><div><div class="label">ID Penyewa</div><div class="value">${esc(invoice.tenant_id)}</div></div><div><div class="label">Periode</div><div class="value">${esc(invoice.period_month)}</div></div><div><div class="label">Jatuh Tempo</div><div class="value">${formatDate(invoice.due_date)}</div></div></section><table><thead><tr><th>Rincian</th><th>Qty</th><th>Harga</th><th>Total</th></tr></thead><tbody>${items}</tbody></table><section class="totals"><div><span>Subtotal</span><strong>${idr(invoice.subtotal)}</strong></div><div><span>Diskon</span><strong>${idr(invoice.discount_amount)}</strong></div><div><span>Pajak</span><strong>${idr(invoice.tax_amount)}</strong></div><div class="grand"><span>Total Tagihan</span><strong>${idr(invoice.total_amount)}</strong></div><div><span>Telah Dibayar</span><strong>${idr(paid)}</strong></div><div><span>Sisa</span><strong>${idr(Math.max(num(invoice.total_amount)-paid,0))}</strong></div></section><footer class="footer">Simpan invoice ini sebagai bukti tagihan periode ${esc(invoice.period_month)}.</footer></main></body></html>`);
   printWindow.document.close();
+  applyPropMatePrintBrand(printWindow);
   printWindow.focus();
   printWindow.print();
 }
@@ -958,6 +1047,7 @@ function printGeneralLedger() {
   if (!printWindow) { toast("Izinkan pop-up untuk mencetak buku besar.", "error"); return; }
   printWindow.document.write(`<!doctype html><html lang="id"><head><meta charset="utf-8"><title>Buku Besar ${esc(account.code)}</title><style>body{font:13px Arial,sans-serif;color:#1f2937;margin:28px}h1{font-size:20px;margin:0 0 6px}.muted{color:#64748b;margin:0 0 18px}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:8px;border-bottom:1px solid #e2e8f0}th{text-align:right}th:nth-child(-n+3){text-align:left}td:nth-last-child(-n+3){text-align:right}small{color:#64748b;font-size:11px}.bg-slate-50{background:#f8fafc}.font-semibold{font-weight:600}.text-wga-700{color:#047857}@media print{body{margin:12mm}}</style></head><body><h1>Buku Besar · ${esc(account.code)} ${esc(account.name)}</h1><p class="muted">Periode ${formatDate(val("ledger-from"))} sampai ${formatDate(val("ledger-to"))} · Dicetak ${formatDate(dateInput(new Date()))}</p>${el("general-ledger-content").innerHTML}</body></html>`);
   printWindow.document.close();
+  applyPropMatePrintBrand(printWindow);
   printWindow.focus();
   printWindow.print();
 }
@@ -1656,7 +1746,7 @@ function cancelPaymentAsk(id){confirmAsk("Batalkan pembayaran?","Jurnal pembalik
 function deletePaymentAsk(id){confirmAsk("Hapus pembayaran?","Hanya pembayaran yang belum terjurnal yang dapat dihapus.",async()=>{try{await api.deletePayment(id);toast("Pembayaran dihapus.");await loadData()}catch(e){toast(e.message,"error")}})}
 function deleteMaintenanceAsk(id){confirmAsk("Hapus tiket maintenance?","Catatan pengeluaran ini akan dihapus.",async()=>{try{await api.deleteMaintenance(id);toast("Maintenance dihapus.");await loadData()}catch(e){toast(e.message,"error")}})}
 
-function confirmAsk(title,msg,cb){el("confirm-title").textContent=title;el("confirm-message").textContent=msg;el("confirm-modal").classList.remove("hidden");el("confirm-ok").onclick=async()=>{closeConfirm();await cb()}}
+function confirmAsk(title,msg,cb,options={}){el("confirm-title").textContent=title;el("confirm-message").textContent=msg;el("confirm-ok").textContent=options.confirmLabel||"Hapus";el("confirm-ok").classList.remove("btn-primary","btn-danger");el("confirm-ok").classList.add(options.confirmClass||"btn-danger");el("confirm-icon").className=`fa-solid ${options.icon||"fa-trash"}`;el("confirm-icon-container").className=`mx-auto w-12 h-12 rounded-full ${options.iconClass||"bg-rose-50 text-rose-600"} flex items-center justify-center`;el("confirm-modal").classList.remove("hidden");el("confirm-ok").onclick=async()=>{closeConfirm();await cb()}}
 function closeConfirm(){el("confirm-modal").classList.add("hidden")}
 function modal(id){el(id).classList.remove("hidden")}function closeModal(id){el(id).classList.add("hidden")}
 function openMobile(){el("sidebar").classList.add("mobile-open");el("sidebar-overlay").classList.remove("hidden")}function closeMobile(){el("sidebar").classList.remove("mobile-open");el("sidebar-overlay").classList.add("hidden")}

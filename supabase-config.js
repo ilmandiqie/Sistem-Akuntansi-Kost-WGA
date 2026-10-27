@@ -1,5 +1,5 @@
 /*
-  KOST WGA V2 — Supabase Client & API Layer
+  PROPMATE Supabase Client & API Layer
 
   Isi konfigurasi Supabase melalui window.KOST_WGA_CONFIG bila ingin override.
   Untuk produksi, tetap gunakan anon key pada project yang aman dan hindari
@@ -16,7 +16,7 @@ const SUPABASE_ANON_KEY = KOST_WGA_CONFIG.SUPABASE_ANON_KEY || "";
 const isSupabaseReady = Boolean(window.supabase && SUPABASE_URL && SUPABASE_ANON_KEY);
 
 if (!isSupabaseReady) {
-  console.warn("Kost WGA: Supabase belum dikonfigurasi dengan benar. Pastikan @supabase/supabase-js sudah dimuat dan URL/key valid.");
+  console.warn("PROPMATE: Supabase belum dikonfigurasi dengan benar. Pastikan @supabase/supabase-js sudah dimuat dan URL/key valid.");
 }
 
 const supabaseClient = isSupabaseReady ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
@@ -87,6 +87,29 @@ const api = {
       .maybeSingle();
     if (error && error.code !== "PGRST116") throw error;
     return data;
+  },
+
+  async getUserDirectory() {
+    this.ensureReady();
+    const { data, error } = await supabaseClient.rpc("admin_list_kost_users");
+    if (error) throw error;
+    return data || [];
+  },
+
+  async approveUser(userId) {
+    this.ensureReady();
+    const { error } = await supabaseClient.rpc("admin_approve_kost_user", {
+      p_user_id: userId
+    });
+    if (error) throw error;
+  },
+
+  async revokeUser(userId) {
+    this.ensureReady();
+    const { error } = await supabaseClient.rpc("admin_revoke_kost_user", {
+      p_user_id: userId
+    });
+    if (error) throw error;
   },
 
   async getProperties() {

@@ -2,7 +2,7 @@
 
 Aplikasi web untuk mengelola properti, kamar, penyewa, kontrak, tagihan, pembayaran, dan operasional penginapan. Modul keuangan tetap tersedia untuk pencatatan serta pelaporan.
 
-> **Live Demo:** [Klik di sini untuk membuka aplikasi](https://ilmandiqie.github.io/Sistem-Akuntansi-Kost-WGA/)
+> **Live Demo:** [Klik di sini untuk membuka aplikasi](https://ilmandiqie.github.io/Sistem-Manajemen-Properti-PROPMATE/)
 
 ---
 
@@ -202,9 +202,3 @@ File `seed.sql` menyediakan data awal untuk pengujian sistem, meliputi:
 ## Deployment
 
 Aplikasi di-deploy menggunakan **GitHub Pages** dan menggunakan **Supabase** sebagai backend database dan authentication.
-
-**Repository:**  
-https://github.com/ilmandiqie/Sistem-Akuntansi-Kost-WGA/
-
-**Live Demo:**  
-https://ilmandiqie.github.io/Sistem-Akuntansi-Kost-WGA/

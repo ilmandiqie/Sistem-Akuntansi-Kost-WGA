@@ -124,7 +124,7 @@ Setelah registrasi berhasil, trigger PostgreSQL `handle_new_user()` secara otoma
 
 1. Buat project pada Supabase dan pastikan Authentication > Providers > Email aktif.
 2. Untuk project Supabase baru, jalankan `schema.sql` melalui SQL Editor. Untuk database yang sudah berisi data, jangan jalankan ulang `schema.sql` karena file tersebut menghapus tabel; jalankan migration profil tenant hanya bila kolomnya belum tersedia.
-3. Jalankan migration berurutan melalui Supabase SQL Editor: `accounting-migration.sql`, `accounting-advanced-migration.sql`, `security-role-migration.sql`, `user-approval-migration.sql`, `user-access-revocation-migration.sql`, `property-room-migration.sql`, `tenant-contract-migration.sql`, `tenant-contract-history-migration.sql`, `billing-accounting-migration.sql`, `payment-verification-migration.sql`, `payment-evidence-migration.sql`, lalu `accounting-period-control-migration.sql`.
+3. Jalankan migration berurutan melalui Supabase SQL Editor: `accounting-migration.sql`, `accounting-advanced-migration.sql`, `security-role-migration.sql`, `user-approval-migration.sql`, `user-access-revocation-migration.sql`, `property-room-migration.sql`, `tenant-contract-migration.sql`, `tenant-contract-history-migration.sql`, `billing-accounting-migration.sql`, `payment-verification-migration.sql`, `payment-evidence-migration.sql`, `payment-verification-journal-idempotency-migration.sql`, lalu `accounting-period-control-migration.sql`.
 4. Masukkan `SUPABASE_URL` dan `SUPABASE_ANON_KEY` pada `supabase-config.js`.
 5. Register akun pertama melalui aplikasi. Migration keamanan membuat profilnya menunggu persetujuan.
 6. Untuk bootstrap admin pertama saja, ambil UUID akun dari Authentication > Users, lalu jalankan SQL ini di Supabase SQL Editor. Akun `pemilik` hanya dapat membaca; role `admin` dan `pengelola` dapat mengelola transaksi.
@@ -149,6 +149,8 @@ Jika kolom tanggal/status pembayaran vendor belum tersedia, jalankan kembali `ac
 `payment-verification-migration.sql` memisahkan status verifikasi transfer dari status pelunasan invoice. Pembayaran transfer baru menunggu pemeriksaan staf; hanya Cash yang langsung dikonfirmasi saat dicatat. Untuk database yang sudah menjalankan billing, jalankan migration verifikasi ini sekali. Pembayaran lama dianggap confirmed untuk menjaga kompatibilitas; konfirmasi tersebut tidak memverifikasi ulang bukti transfer historis.
 
 `payment-evidence-migration.sql` membuat bucket bukti transfer privat. Jalankan sekali setelah migration verifikasi. Transfer baru wajib memiliki nomor referensi dan bukti, tetapi staf tetap harus memeriksa mutasi bank dan mengonfirmasi secara manual; gambar bukti bukan konfirmasi otomatis.
+
+`payment-verification-journal-idempotency-migration.sql` memperbaiki verifikasi pembayaran agar memakai jurnal yang sudah ada untuk pembayaran terkait, sehingga tidak gagal karena nomor jurnal unik terduplikasi. Jalankan sekali setelah migration bukti transfer pada database yang sudah aktif.
 
 `accounting-period-control-migration.sql` menambahkan penutupan periode oleh admin. Uji dengan periode yang seimbang dan tanpa transfer pending; pastikan jurnal baru pada periode tertutup ditolak. Penutupan tidak menyediakan pembukaan ulang; koreksi harus dilakukan pada periode terbuka berikutnya.
 

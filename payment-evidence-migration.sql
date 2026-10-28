@@ -160,6 +160,7 @@ declare
   v_confirmed_before numeric(18,2);
   v_payment_status text;
   v_journal_id uuid;
+  v_journal_created boolean := false;
   v_period_month text;
   v_period_status text;
 begin
@@ -205,17 +206,27 @@ begin
   values ('1101', 'Kas & Bank', 'Asset', 'debit', true), ('1201', 'Piutang Usaha', 'Asset', 'debit', true)
   on conflict (code) do nothing;
 
-  insert into public.journal_entries (journal_no, entry_date, source_table, source_id, description, status, created_by)
-  values ('JRN-PAY-' || replace(v_payment.id::text, '-', ''), v_payment.payment_date,
-    'payments', v_payment.id,
-    'Transfer terverifikasi untuk pembayaran ' || v_payment.payment_id,
-    'posted', auth.uid())
-  returning id into v_journal_id;
+  select id into v_journal_id
+  from public.journal_entries
+  where source_table = 'payments' and source_id = v_payment.id
+  for update;
 
-  insert into public.journal_entry_lines (journal_entry_id, account_code, debit, credit, description)
-  values
-    (v_journal_id, '1101', v_allocated, 0, 'Transfer terkonfirmasi sebagai kas/bank'),
-    (v_journal_id, '1201', 0, v_allocated, 'Pelunasan piutang invoice');
+  if v_journal_id is null then
+    insert into public.journal_entries (journal_no, entry_date, source_table, source_id, description, status, created_by)
+    values ('JRN-PAY-' || replace(v_payment.id::text, '-', ''), v_payment.payment_date,
+      'payments', v_payment.id,
+      'Transfer terverifikasi untuk pembayaran ' || v_payment.payment_id,
+      'posted', auth.uid())
+    returning id into v_journal_id;
+    v_journal_created := true;
+  end if;
+
+  if v_journal_created then
+    insert into public.journal_entry_lines (journal_entry_id, account_code, debit, credit, description)
+    values
+      (v_journal_id, '1101', v_allocated, 0, 'Transfer terkonfirmasi sebagai kas/bank'),
+      (v_journal_id, '1201', 0, v_allocated, 'Pelunasan piutang invoice');
+  end if;
 
   update public.payments
   set verification_status = 'confirmed', verified_by = auth.uid(), verified_at = now(), status = v_payment_status
